@@ -73,6 +73,7 @@ def build_buttons(currencies, symbols, widget_script_fun, action_script_fun):
       'BTTTriggerConfig': {
         'BTTTouchBarItemIconHeight': 0,
         'BTTTouchBarItemIconWidth': 0,
+        'BTTTouchBarItemPlacement': 1,
         'BTTTouchBarItemPadding': 0,
         'BTTTouchBarButtonColor': '0.000000, 0.000000, 0.000000, 255.000000',
         'BTTTouchBarOnlyShowIcon': 1
