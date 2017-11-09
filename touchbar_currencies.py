@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 
 from math import log10, floor
 import requests
@@ -17,7 +17,7 @@ def round_price(x):
     return round_to_2(x)
 
 def get_bitfinex_symbols():
-    response = requests.get(BITFINEX_URL + '/v1/symbols')
+    response = requests.get(BITFINEX_URL + '/v1/symbols', timeout=10)
     symbols = response.json()
     return [(symbol[:3].upper(), symbol[3:].upper()) for symbol in symbols]
 
@@ -25,7 +25,7 @@ def get_bitfinex_tickers(symbols):
     params = {
         'symbols': ','.join(['t' + ''.join(symbol) for symbol in symbols])
     }
-    response = requests.get(BITFINEX_URL + '/v2/tickers', params=params)
+    response = requests.get(BITFINEX_URL + '/v2/tickers', params=params, timeout=10)
     tickers = response.json()
     return {(ticker[0][1:4], ticker[0][4:]): ticker[7] for ticker in tickers}
 

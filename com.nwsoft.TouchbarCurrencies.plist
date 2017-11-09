@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.nwsoft.touchbarCurrencies</string>
+    <string>com.nwsoft.TouchbarCurrencies</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/python3</string>
-        <string>/Users/wolf/Projects/trading/touchbar_currencies/touchbar_currencies.py</string>
+        <string>/usr/bin/python</string>
+        <string>/usr/local/bin/touchbar-currencies</string>
     </array>
     <key>KeepAlive</key>
 	<true/>
@@ -15,5 +15,9 @@
     <integer>60</integer>
     <key>RunAtLoad</key>
     <true/>
+    <key>StandardErrorPath</key>
+	<string>/tmp/com.nwsoft.TouchbarCurrencies.err</string>
+	<key>StandardOutPath</key>
+	<string>/tmp/com.nwsoft.TouchbarCurrencies.out</string>
 </dict>
 </plist>
