@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 
 from math import log10, floor
 import requests
@@ -7,27 +8,6 @@ import redis
 APP_NAME = 'tbcurrencies'
 BITFINEX_URL='https://api.bitfinex.com'
 BITTREX_URL='https://bittrex.com'
-
-def round_to_2(x):
-    return round(x, -int(floor(log10(abs(x)))) + 1)
-
-def round_price(x):
-    if x >= 1:
-        return round(x, 2)
-    return round_to_2(x)
-
-def currency_symbol_to_char(symbol):
-    if symbol == 'USD' or symbol == 'USDT':
-        return u'$'
-    if symbol == 'BTC':
-        return u'₿'
-    return ''
-
-def format_percent_change(pc):
-    if pc >= 0:
-        return '+' + round(pc * 100, 2) + '%'
-    else:
-        return '-' + round(pc * 100, 2) + '%'
 
 def get_bitfinex_symbols():
     response = requests.get(BITFINEX_URL + '/v1/symbols', timeout=10)
@@ -59,40 +39,61 @@ def get_bittrex_tickers():
         ] for ticker in tickers
     ]
 
-bitfinex_symbols = get_bitfinex_symbols()
-bitfinex_tickers = sorted(get_bitfinex_tickers(bitfinex_symbols), key=lambda x: x[2])
+def round_to_2(x):
+    return round(x, -int(floor(log10(abs(x)))) + 1)
 
-bittrex_tickers = sorted(get_bittrex_tickers(), key=lambda x: x[2])
+def fromat_price(x):
+    if x >= 1:
+        return str(round(x, 2))
+    return str(round_to_2(x))
 
-r = redis.StrictRedis(host='localhost', port=6379, db=0)
-for i, ticker in enumerate(bitfinex_tickers):
+def format_currency_symbol(symbol):
+    if symbol == 'USD' or symbol == 'USDT':
+        return u'$'
+    if symbol == 'BTC':
+        return u'₿'
+    return ''
+
+def format_percent_change(pc):
+    if pc >= 0:
+        return '+' + str(round(pc * 100, 2)) + '%'
+    else:
+        return str(round(pc * 100, 2)) + '%'
+
+def format_button(ticker):
     symbol = ticker[0]
-    price = round_price(ticker[1])
-    percent_change = ticker[2]
+    return (
+        symbol[0] + ': ' +
+        fromat_price(ticker[1]) + ' ' +
+        format_currency_symbol(symbol[1]) + ' ' +
+        format_percent_change(ticker[2])
+    )
 
-    symbol_key = APP_NAME + ':bitfinex:' + ':'.join(symbol)
-    button_key = APP_NAME + ':buttons:bitfinex:' + i
-    r.mset({
-        symbol_key + ':price': price,
-        symbol_key + ':percent_change': percent_change,
-        button_key + ':currency': symbol[0],
-        button_key + ':currency_symbol': currency_symbol_to_char(symbol[1]),
-        button_key + ':price': price,
-        button_key + ':percent_change': percent_change
-    })
-    r.set(key + ':price', price)
-    r.set(key + ':percent_change', percent_change)
-    key = APP_NAME = ':buttons:bitfinex:' + i ''
-    r.delete(key)
-    r.rpush(key, )
-    r.rpush(key, ticker[2])
-    key = APP_NAME + ':buttons:bitfinex:' + i
-    r.delete()
+def save_tickers(r, exchange, tickers, currencies):
+    base_key = ':'.join([APP_NAME, exchange])
+    for currency in currencies:
+        ctickers = filter(lambda x: x[0][1] == currency, tickers)
+        for i, ticker in enumerate(ctickers):
+            exchange_key = ':'.join([base_key, ':'.join(ticker[0])])
+            button_key = ':'.join([base_key, 'buttons', currency, str(i)])
+            text = format_button(ticker)
+            r.mset({
+                exchange_key: text,
+                button_key: text
+            })
 
-for i, ticker in enumerate(bittrex_tickers):
-    key = APP_NAME + ':bittrex:' + ':'.join(ticker[0])
-    r.delete(key)
-    r.rpush(key, round_price(ticker[1]))
-    r.rpush(key, ticker[2])
+def main():
+    bitfinex_symbols = get_bitfinex_symbols()
+    bitfinex_tickers = sorted(get_bitfinex_tickers(bitfinex_symbols),
+                              key=lambda x: x[2], reverse=True)
+    bittrex_tickers = sorted(get_bittrex_tickers(),
+                             key=lambda x: x[2], reverse=True)
 
-exit(0)
+    r = redis.StrictRedis(host='localhost', port=6379, db=0)
+    save_tickers(r, 'bitfinex', bitfinex_tickers, ['USD', 'BTC'])
+    save_tickers(r, 'bittrex', bittrex_tickers, ['BTC', 'USDT'])
+
+    exit(0)
+
+if __name__ == '__main__':
+    main()
