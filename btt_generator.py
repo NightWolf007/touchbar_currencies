@@ -10,28 +10,12 @@ APP_NAME = 'tbcurrencies'
 BITFINEX_URL='https://api.bitfinex.com'
 BITTREX_URL='https://bittrex.com'
 
+BUTTONS_COUNT = 20
 OPTION_KEY_CODE = 524288
 
-def get_bitfinex_symbols():
-    response = requests.get(BITFINEX_URL + '/v1/symbols', timeout=10)
-    symbols = response.json()
-    return [(symbol[:3].upper(), symbol[3:].upper()) for symbol in symbols]
-
-def get_bittrex_symbols():
-    response = requests.get(BITTREX_URL + '/api/v1.1/public/getmarkets', timeout=10)
-    markets = response.json()['result']
-    return [(m['MarketCurrency'], m['BaseCurrency']) for m in markets]
-
-def currency_symbol_to_char(symbol):
-    if symbol == 'USD' or symbol == 'USDT':
-        return u'$'
-    if symbol == 'BTC':
-        return u'₿'
-    return ''
-
-def build_symbol_widget(symbol, order, widget_script, action_script, modifier_key=None):
-    widget =  {
-        'BTTWidgetName': ':'.join(symbol),
+def build_symbol_widget(name, order, widget_script, action_script, modifier_key=None):
+    widget = {
+        'BTTWidgetName': name,
         'BTTTriggerType': 639,
         'BTTTriggerTypeDescription': 'Apple Script Widget',
         'BTTTriggerClass': 'BTTTriggerTypeTouchBar',
@@ -56,25 +40,24 @@ def build_symbol_widget(symbol, order, widget_script, action_script, modifier_ke
         widget['BTTRequiredModifierKeys'] = modifier_key
     return widget
 
-def build_symbol_widgets(symbols, widget_script_fun, action_script_fun, modifier_key=None):
+def build_symbol_widgets(currency, widget_script_fun, action_script_fun, modifier_key=None):
     widgets = []
-    for i, symbol in enumerate(symbols):
+    for i in range(BUTTONS_COUNT):
         widget = build_symbol_widget(
-            symbol,
+            currency + ':' + str(i),
             i + 1,
-            widget_script_fun(symbol),
-            action_script_fun(symbol),
+            widget_script_fun(currency, i),
+            action_script_fun(currency, i),
             modifier_key
         )
         widgets.append(widget)
     return widgets
 
-def build_buttons(currencies, symbols, widget_script_fun, action_script_fun):
+def build_buttons(currencies, widget_script_fun, action_script_fun):
     symbol_buttons = []
     for currency, modifier_key in currencies.items():
         symbol_buttons += build_symbol_widgets(
-            filter(lambda x: x[1] == currency, symbols),
-            widget_script_fun, action_script_fun, modifier_key
+            currency, widget_script_fun, action_script_fun, modifier_key
         )
     close_button = {
       'BTTTouchBarButtonName': 'Close Group',
@@ -96,8 +79,8 @@ def build_buttons(currencies, symbols, widget_script_fun, action_script_fun):
     }
     return [close_button] + symbol_buttons
 
-def build_group(name, order, currencies, symbols, widget_script_fun, action_script_fun, icon=None):
-    buttons = build_buttons(currencies, symbols, widget_script_fun, action_script_fun)
+def build_group(name, order, currencies, widget_script_fun, action_script_fun, icon=None):
+    buttons = build_buttons(currencies, widget_script_fun, action_script_fun)
     return {
         'BTTTouchBarButtonName': name,
         'BTTTriggerType': 630,
@@ -155,62 +138,14 @@ def build_parser():
         dest='main',
         help='Currencies on top bar'
     )
-    parser.add_argument(
-        '--bitfinex',
-        metavar='[CURRENCY:CURRENCY,]',
-        type=str,
-        nargs='+',
-        default=[],
-        dest='bitfinex',
-        help='Currencies on Bitfinex tab'
-    )
-    parser.add_argument(
-        '--bittrex',
-        metavar='[CURRENCY:CURRENCY,]',
-        type=str,
-        nargs='+',
-        default=[],
-        dest='bittrex',
-        help='Currencies on Bittrex tab'
-    )
     return parser
 
-def main():
-    parser = build_parser()
-    args = parser.parse_args()
-    main_symbols = [tuple(symbol.split(':')) for symbol in args.main]
-    bitfinex_symbols = [tuple(symbol.split(':')) for symbol in args.bitfinex]
-    bittrex_symbols = [tuple(symbol.split(':')) for symbol in args.bittrex]
-    output = args.output
-
-    bitfinex_widget_fun = lambda x: '"' + x[0] + ': " & {do shell script "/usr/local/bin/redis-cli get ' + APP_NAME + ':bitfinex:' + ':'.join(x) + '"} & " ' + currency_symbol_to_char(x[1]) + '"'
+def build_main_widgets(main_symbols, start_order):
+    bitfinex_widget_fun = lambda x: 'do shell script "/usr/local/bin/redis-cli get ' + APP_NAME + ':bitfinex:' + ':'.join(x) + '"'
     bitfinex_action_fun = lambda x: "tell application \"Google Chrome\"\r\tactivate\r\topen location \"https://www.bitfinex.com/t/" + ':'.join(x) + "\"\rend tell"
-    bittrex_widget_fun = lambda x: '"' + x[0] + ': " & {do shell script "/usr/local/bin/redis-cli get ' + APP_NAME + ':bittrex:' + ':'.join(x) + '"} & " ' + currency_symbol_to_char(x[1]) + '"'
+    bittrex_widget_fun = lambda x: 'do shell script "/usr/local/bin/redis-cli get ' + APP_NAME + ':bittrex:' + ':'.join(x) + '"'
     bittrex_action_fun = lambda x: "tell application \"Google Chrome\"\r\tactivate\r\topen location \"https://bittrex.com/Market/Index?MarketName=" + '-'.join(reversed(x)) + "\"\rend tell"
-
-    if len(bitfinex_symbols) == 0:
-        bitfinex_symbols = sorted(get_bitfinex_symbols(), key=lambda x: x[0])
-    if len(bittrex_symbols) == 0:
-        bittrex_symbols = sorted(get_bittrex_symbols(), key=lambda x: x[0])
-
-    bitfinex_group = build_group(
-        'Bitfinex',
-        0,
-        {'USD': None, 'BTC': OPTION_KEY_CODE},
-        bitfinex_symbols,
-        bitfinex_widget_fun,
-        bitfinex_action_fun,
-        icon=load_icon('resources/bitfinex_icon.png')
-    )
-    bittrex_group = build_group(
-        'Bittrex',
-        1,
-        {'USDT': None, 'BTC': OPTION_KEY_CODE},
-        bittrex_symbols,
-        bittrex_widget_fun,
-        bittrex_action_fun,
-        icon=load_icon('resources/bittrex_icon.png')
-    )
+    
     main_widgets = []
     for i, (exchange, c1, c2) in enumerate(main_symbols):
         symbol = (c1, c2)
@@ -222,8 +157,41 @@ def main():
             action_script = bittrex_action_fun(symbol)
         else:
             continue
-        widget = build_symbol_widget(symbol, i + 2, widget_script, action_script)
+        widget = build_symbol_widget(
+            ':'.join(symbol), i + start_order, widget_script, action_script
+        )
         main_widgets.append(widget)
+    return main_widgets
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+    main_symbols = [tuple(symbol.split(':')) for symbol in args.main]
+    output = args.output
+
+    bitfinex_widget_fun = lambda c, id: 'do shell script "/usr/local/bin/redis-cli get ' + ':'.join([APP_NAME, 'bitfinex', 'buttons', c, str(id)]) + '"'
+    bitfinex_action_fun = lambda c, id: "set currency to do shell script \"/usr/local/bin/redis-cli get " + ':'.join([APP_NAME, 'bitfinex', 'buttons', c, str(id)]) + " | sed 's/^\\\([A-Z0-9]*\\\):.*$/\\\\1/'\"\rtell application \"Google Chrome\"\r\tactivate\r\topen location \"https://www.bitfinex.com/t/\" & currency & \":" + c + "\"\rend tell"
+    bitfinex_group = build_group(
+        'Bitfinex',
+        0,
+        {'USD': None, 'BTC': OPTION_KEY_CODE},
+        bitfinex_widget_fun,
+        bitfinex_action_fun,
+        icon=load_icon('resources/bitfinex_icon.png')
+    )
+
+    bittrex_widget_fun = lambda c, id: 'do shell script "/usr/local/bin/redis-cli get ' + ':'.join([APP_NAME, 'bittrex', 'buttons', c, str(id)]) + '"'
+    bittrex_action_fun = lambda c, id: "set currency to do shell script \"/usr/local/bin/redis-cli get " + ':'.join([APP_NAME, 'bittrex', 'buttons', c, str(id)]) + " | sed 's/^\\\([A-Z0-9]*\\\):.*$/\\\\1/'\"\rtell application \"Google Chrome\"\r\tactivate\r\topen location \"https://bittrex.com/Market/Index?MarketName=" + c + "-\" & currency\rend tell"
+    bittrex_group = build_group(
+        'Bittrex',
+        1,
+        {'BTC': None, 'USDT': OPTION_KEY_CODE},
+        bittrex_widget_fun,
+        bittrex_action_fun,
+        icon=load_icon('resources/bittrex_icon.png')
+    )
+
+    main_widgets = build_main_widgets(main_symbols, 2)
 
     triggers = [bitfinex_group, bittrex_group] + main_widgets
     btt_config = build_config('Cryptocurrencies', 'Global', triggers)
